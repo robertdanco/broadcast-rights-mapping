@@ -105,11 +105,3 @@ The scripts include comprehensive error handling for:
 - File system operations
 
 All errors are logged to both console and log files for debugging.
-
-## Contributing
-
-When contributing to this project, please:
-- Follow the existing code style and formatting
-- Add appropriate error handling and logging
-- Update documentation as needed
-- Add tests for new functionality
