@@ -80,13 +80,13 @@ The scrapers generate CSV files with the following columns:
 
 ```
 project/
-├── data/                  # Scraped data output directory
-│   └── espn_games_*.csv  # CSV files with scraped data
-├── logs/                  # Log files directory
-│   ├── scraper.log       # Detailed logging information
+├── data/                       # Scraped data output directory
+│   └── espn_games_*.csv        # CSV files with scraped data
+├── logs/                       # Log files directory
+│   ├── scraper.log             # Detailed logging information
 │   └── scraping_summary_*.txt  # Summary reports
-├── espn_game_scraper.py  # Single day scraping script
-└── espn_bulk_scraper.py  # Bulk scraping script
+├── espn_game_scraper.py        # Single day scraping script
+└── espn_bulk_scraper.py        # Bulk scraping script
 ```
 
 ## Rate Limiting and Best Practices
