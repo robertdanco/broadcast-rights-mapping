@@ -9,16 +9,20 @@ from espn_game_scraper import scrape_espn_games, VALID_LEAGUES
 
 
 class ESPNScraper:
-    def __init__(self, output_dir: str = "data"):
+    def __init__(self, output_dir: str = "data", logs_dir: str = "logs"):
         self.output_dir = output_dir
+        self.logs_dir = logs_dir
+
+        # Create necessary directories
         os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(logs_dir, exist_ok=True)
 
         # Set up logging
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
-                logging.FileHandler(os.path.join(output_dir, "scraper.log")),
+                logging.FileHandler(os.path.join(logs_dir, "scraper.log")),
                 logging.StreamHandler(),
             ],
         )
@@ -37,29 +41,24 @@ class ESPNScraper:
 
         return date_list
 
-    def scrape_and_save(self, league: str, date: str) -> Tuple[bool, str]:
-        """Scrape data for a specific league and date and save to CSV."""
+    def scrape_data(self, league: str, date: str) -> Tuple[bool, pd.DataFrame]:
+        """Scrape data for a specific league and date."""
         try:
             # Use existing scrape_espn_games function
             df, scraped_date = scrape_espn_games(league, date)
 
             if len(df) > 0:
-                # Generate filename with league, date and timestamp
-                current_ts = int(time.time())
-                filename = f"espn_games_{league}_{scraped_date}_{current_ts}.csv"
-                filepath = os.path.join(self.output_dir, filename)
-
-                # Save to CSV
-                df.to_csv(filepath, index=False)
-                self.logger.info(f"Saved data to {filepath}")
-                return True, filepath
+                self.logger.info(
+                    f"Successfully scraped {len(df)} games for {league} on {date}"
+                )
+                return True, df
             else:
                 self.logger.info(f"No games found for {league} on {date}")
-                return True, ""
+                return True, pd.DataFrame()
 
         except Exception as e:
             self.logger.error(f"Error scraping {league} for {date}: {str(e)}")
-            return False, str(e)
+            return False, pd.DataFrame()
 
     def scrape_range(
         self, leagues: List[str], start_date: str, end_date: str, delay: float = 2.0
@@ -71,37 +70,46 @@ class ESPNScraper:
         # Track success/failure statistics
         stats = {"total": len(dates) * len(leagues), "success": 0, "failure": 0}
 
-        # Store all scraped data for summary
-        all_data = []
+        # Store all scraped data
+        all_dfs = []
 
         for date in dates:
             for league in leagues:
                 self.logger.info(f"Scraping {league} for date {date}")
 
-                success, result = self.scrape_and_save(league, date)
+                success, df = self.scrape_data(league, date)
 
                 if success:
                     stats["success"] += 1
-                    if result:  # If there was data saved
-                        all_data.append(
-                            {"date": date, "league": league, "file": result}
-                        )
+                    if not df.empty:
+                        all_dfs.append(df)
                 else:
                     stats["failure"] += 1
-                    self.logger.error(f"Failed to scrape {league} for {date}: {result}")
 
-                # Respect rate limits with random jitter
+                # Respect rate limits
                 time.sleep(delay)
 
-        # Create summary report
-        self.create_summary_report(stats, all_data)
+        # Combine all DataFrames and save to single CSV
+        if all_dfs:
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"espn_games_combined_{timestamp}.csv"
+            filepath = os.path.join(self.output_dir, filename)
+            combined_df.to_csv(filepath, index=False)
+            self.logger.info(f"Saved combined data to {filepath}")
+
+            # Create summary report
+            self.create_summary_report(stats, filepath, combined_df)
+        else:
+            self.logger.warning("No data was collected across all scraping attempts")
+            self.create_summary_report(stats, None, pd.DataFrame())
 
         return stats
 
-    def create_summary_report(self, stats: dict, data: List[dict]):
+    def create_summary_report(self, stats: dict, output_file: str, df: pd.DataFrame):
         """Create a summary report of the scraping operation."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        report_path = os.path.join(self.output_dir, f"scraping_summary_{timestamp}.txt")
+        report_path = os.path.join(self.logs_dir, f"scraping_summary_{timestamp}.txt")
 
         with open(report_path, "w") as f:
             f.write("ESPN Scraping Summary Report\n")
@@ -111,10 +119,12 @@ class ESPNScraper:
             f.write(f"Failed: {stats['failure']}\n")
             f.write(f"Success rate: {(stats['success']/stats['total'])*100:.2f}%\n\n")
 
-            if data:
-                f.write("Files generated:\n")
-                for entry in data:
-                    f.write(f"- {entry['league']} ({entry['date']}): {entry['file']}\n")
+            if not df.empty and output_file:
+                f.write("Data Summary:\n")
+                f.write(f"- Total games collected: {len(df)}\n")
+                f.write(f"- Leagues represented: {', '.join(df['league'].unique())}\n")
+                f.write(f"- Date range: {df['date'].min()} to {df['date'].max()}\n")
+                f.write(f"- Output file: {output_file}\n")
 
 
 def validate_date(date_str: str) -> bool:
@@ -144,6 +154,7 @@ def main():
     parser.add_argument(
         "--output-dir", default="data", help="Output directory for scraped data"
     )
+    parser.add_argument("--logs-dir", default="logs", help="Directory for log files")
 
     args = parser.parse_args()
 
@@ -152,7 +163,7 @@ def main():
         parser.error("Dates must be in YYYYMMDD format")
 
     # Initialize scraper
-    scraper = ESPNScraper(output_dir=args.output_dir)
+    scraper = ESPNScraper(output_dir=args.output_dir, logs_dir=args.logs_dir)
 
     # Run scraper
     stats = scraper.scrape_range(
