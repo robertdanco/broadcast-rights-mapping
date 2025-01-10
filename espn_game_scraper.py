@@ -180,7 +180,9 @@ def parse_arguments():
         type=str,
         required=True,
         choices=sorted(VALID_LEAGUES),
-        help="The sports league to scrape (e.g., mlb, nba, nfl)",
+        help="The sports league to scrape. Allowed values are "
+        + ", ".join(sorted(VALID_LEAGUES)),
+        metavar="",
     )
 
     parser.add_argument(

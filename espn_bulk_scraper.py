@@ -144,7 +144,9 @@ def main():
         "--leagues",
         nargs="+",
         choices=sorted(VALID_LEAGUES),
-        help="List of leagues to scrape",
+        help="List of leagues to scrape. Allowed values are "
+        + ", ".join(sorted(VALID_LEAGUES)),
+        metavar="",
     )
     parser.add_argument("--start-date", required=True, help="Start date (YYYYMMDD)")
     parser.add_argument("--end-date", required=True, help="End date (YYYYMMDD)")
