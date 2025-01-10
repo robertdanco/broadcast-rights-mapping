@@ -197,24 +197,6 @@ def get_headers():
     }
     
     return headers
-    parser = argparse.ArgumentParser(description='Scrape ESPN game schedules and watch options.')
-    
-    parser.add_argument(
-        '--league',
-        type=str,
-        required=True,
-        choices=sorted(VALID_LEAGUES),
-        help='The sports league to scrape (e.g., mlb, nba, nfl)'
-    )
-    
-    parser.add_argument(
-        '--date',
-        type=str,
-        required=True,
-        help='The date to scrape in YYYYMMDD format (e.g., 20250409)'
-    )
-    
-    return parser.parse_args()
 
 def main():
     # Configure logging
