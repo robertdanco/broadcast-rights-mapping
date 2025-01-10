@@ -8,6 +8,17 @@ wheels/
 
 # Virtual environments
 .venv
+.python-version
+
+# Python compiled bytecode files
+*.pyc
+__pycache__/
 
 # Output files
 data/*
+
+# MacOS generated files
+.DS_Store
+
+# uv generated files
+uv.lock
