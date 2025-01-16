@@ -277,6 +277,16 @@ class SportsMarketLookup(ABC):
 
         return filepath
 
+    def _deduplicate_teams(self, teams: List[str]) -> List[str]:
+        """Deduplicate and sort team names."""
+        # Convert to set to remove duplicates, then back to sorted list
+        return sorted(set(teams))
+
+    def _join_teams(self, teams: List[str]) -> str:
+        """Join team names into a comma-separated string after deduplication."""
+        deduped_teams = self._deduplicate_teams(teams)
+        return ",".join(deduped_teams) if deduped_teams else ""
+
     @abstractmethod
     def get_request_url(self, zip_code: str) -> str:
         """Generate the request URL for a given ZIP code."""
@@ -394,7 +404,8 @@ class MLBMarketLookup(SportsMarketLookup):
         if not response_data or "teams" not in response_data:
             return False, ""
         try:
-            return True, ",".join(sorted(response_data["teams"]))
+            teams = response_data["teams"]
+            return True, self._join_teams(teams)
         except (KeyError, TypeError):
             return False, ""
 
@@ -406,16 +417,14 @@ class NBAMarketLookup(SportsMarketLookup):
         return f"{self.league_config.base_url}?zip={zip_code}"
 
     async def parse_response(self, response_data: dict) -> Tuple[bool, str]:
-        if (
-            not response_data
-            or "results" not in response_data
-            or not response_data["results"]
-        ):
+        if not response_data or "results" not in response_data:
             return False, ""
+        # An empty list is considered a valid response
+        if not response_data["results"]:
+            return True, ""
         try:
-            return True, ",".join(
-                sorted(team["abbr"] for team in response_data["results"])
-            )
+            teams = [team["abbr"] for team in response_data["results"]]
+            return True, self._join_teams(teams)
         except (KeyError, TypeError):
             return False, ""
 
@@ -431,7 +440,7 @@ class NHLMarketLookup(SportsMarketLookup):
             return False, ""
         try:
             teams = [team["teamName"]["default"] for team in response_data]
-            return True, ",".join(sorted(teams))
+            return True, self._join_teams(teams)
         except (KeyError, TypeError):
             return False, ""
 
