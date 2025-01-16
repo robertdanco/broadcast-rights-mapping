@@ -36,22 +36,18 @@ A comprehensive collection of Python scripts for scraping game schedules, watch 
 - NBA
 - NHL
 
-## Requirements
+## Requirements & Installation
 
-```
-requests
-beautifulsoup4
-pandas
-aiohttp
-tqdm
-```
-
-## Installation
+This project uses poetry for dependency management. All dependencies are specified in the pyproject.toml file.
 
 1. Clone the repository
-2. Install the required packages:
+2. Install poetry if you haven't already:
 ```bash
-pip install -r requirements.txt
+curl -sSL https://install.python-poetry.org | python3 -
+```
+3. Install dependencies:
+```bash
+poetry install
 ```
 
 ## Usage
