@@ -38,16 +38,21 @@ A comprehensive collection of Python scripts for scraping game schedules, watch 
 
 ## Requirements & Installation
 
-This project uses poetry for dependency management. All dependencies are specified in the pyproject.toml file.
+This project requires Python 3.12 or higher and uses the following dependencies:
+- aiohttp >= 3.11.11
+- argparse >= 1.4.0
+- beautifulsoup4 (bs4) >= 0.0.2
+- logging >= 0.4.9.6
+- pandas >= 2.2.3
+- requests >= 2.32.3
+- tqdm >= 4.67.1
+
+To install:
 
 1. Clone the repository
-2. Install poetry if you haven't already:
+2. Install the project and its dependencies:
 ```bash
-curl -sSL https://install.python-poetry.org | python3 -
-```
-3. Install dependencies:
-```bash
-poetry install
+pip install .
 ```
 
 ## Usage
