@@ -16,7 +16,7 @@ from collections import deque
 import json
 from pathlib import Path
 
-# python all_local_rights_scraper.py --input-file zip_dma_mapping.csv --config-file config.json
+# python all_local_rights_scraper.py --input-file zip_dma_mapping_testing.csv
 
 
 @dataclass
@@ -225,22 +225,13 @@ class SportsMarketLookup(ABC):
         self.rate_limiter = RateLimiter(initial_rate=config.rate_limit)
         self.retry_strategy = RetryStrategy(max_retries=config.max_retries)
         self.error_counts = {code: 0 for code in ErrorCode}
+        self.errors = []
 
         # Set up logging
         self.logger = logging.getLogger(f"{__name__}.{league_config.name}")
 
-    @abstractmethod
-    async def parse_response(self, response_data: dict) -> Tuple[bool, str]:
-        """Parse the API response and return success status and team names."""
-        pass
-
-    @abstractmethod
-    def get_request_url(self, zip_code: str) -> str:
-        """Generate the request URL for a given ZIP code."""
-        pass
-
-    def validate_zip_code(self, zip_code: str) -> Tuple[bool, ErrorCode, str]:
-        """Validate ZIP code format."""
+    def _validate_zip(self, zip_code: str) -> Tuple[bool, ErrorCode, str]:
+        """Internal validation method."""
         if not zip_code.isdigit():
             return False, ErrorCode.INVALID_ZIP, "ZIP code must contain only digits"
         if len(zip_code) != 5:
@@ -249,12 +240,58 @@ class SportsMarketLookup(ABC):
             return False, ErrorCode.INTERNATIONAL, "Non-US ZIP code detected"
         return True, ErrorCode.SUCCESS, ""
 
+    def get_headers(self) -> Dict[str, str]:
+        """Get randomized browser-like headers."""
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+        ]
+
+        return {
+            "User-Agent": random.choice(user_agents),
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+        }
+
+    def save_error_report(self) -> str:
+        """Save error report to file and return the filepath."""
+        if not self.errors:
+            return ""
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"error_report_{self.league_config.name}_{timestamp}.txt"
+        filepath = os.path.join(self.config.logs_dir, filename)
+
+        with open(filepath, "w") as f:
+            f.write(f"Error Report for {self.league_config.name}\n")
+            f.write("=" * (len(self.league_config.name) + 16) + "\n\n")
+            for error in self.errors:
+                f.write(f"ZIP: {error['zip_code']}\n")
+                f.write(f"Error Code: {error['error_code']}\n")
+                f.write(f"Message: {error['error_message']}\n")
+                f.write("-" * 50 + "\n")
+
+        return filepath
+
+    @abstractmethod
+    def get_request_url(self, zip_code: str) -> str:
+        """Generate the request URL for a given ZIP code."""
+        pass
+
+    @abstractmethod
+    async def parse_response(self, response_data: dict) -> Tuple[bool, str]:
+        """Parse the API response and return success status and team names."""
+        pass
+
     async def process_zip_codes(self, zip_codes: List[str]) -> pd.DataFrame:
         """Process multiple ZIP codes and return results as a DataFrame."""
         results = []
-        total_batches = (
-            len(zip_codes) + self.config.batch_size - 1
-        ) // self.config.batch_size
+        processed = 0
+        total = len(zip_codes)
         batches = [
             zip_codes[i : i + self.config.batch_size]
             for i in range(0, len(zip_codes), self.config.batch_size)
@@ -264,8 +301,14 @@ class SportsMarketLookup(ABC):
             batch_results = []
             for zip_code in batch:
                 # Validate ZIP code first
-                is_valid, error_code, error_message = self.validate_zip_code(zip_code)
+                is_valid, error_code, error_message = self._validate_zip(zip_code)
                 if not is_valid:
+                    error_data = {
+                        "zip_code": zip_code,
+                        "error_code": error_code.name,
+                        "error_message": error_message,
+                    }
+                    self.errors.append(error_data)
                     batch_results.append(
                         {
                             "zip_code": zip_code,
@@ -285,19 +328,35 @@ class SportsMarketLookup(ABC):
                         data = await response.json()
                         success, teams = await self.parse_response(data)
 
-                        batch_results.append(
-                            {
-                                "zip_code": zip_code,
-                                "in_market_teams": teams if success else None,
-                                "error_code": (
-                                    None if success else ErrorCode.INVALID_DATA.name
-                                ),
-                                "error_message": (
-                                    None if success else "Failed to parse response"
-                                ),
-                            }
-                        )
+                        result = {
+                            "zip_code": zip_code,
+                            "in_market_teams": teams if success else None,
+                            "error_code": (
+                                None if success else ErrorCode.INVALID_DATA.name
+                            ),
+                            "error_message": (
+                                None if success else "Failed to parse response"
+                            ),
+                        }
+
+                        if not success:
+                            self.errors.append(
+                                {
+                                    "zip_code": zip_code,
+                                    "error_code": ErrorCode.INVALID_DATA.name,
+                                    "error_message": "Failed to parse response",
+                                }
+                            )
+
+                        batch_results.append(result)
+
                 except Exception as e:
+                    error_data = {
+                        "zip_code": zip_code,
+                        "error_code": ErrorCode.UNKNOWN.name,
+                        "error_message": str(e),
+                    }
+                    self.errors.append(error_data)
                     batch_results.append(
                         {
                             "zip_code": zip_code,
@@ -307,8 +366,13 @@ class SportsMarketLookup(ABC):
                         }
                     )
 
-                await asyncio.sleep(self.rate_limiter.delay)
+            processed += len(batch)
+            if processed % 100 == 0:  # Status update every 100 ZIPs
+                self.logger.info(
+                    f"{self.league_config.name}: Processed {processed}/{total} ZIP codes"
+                )
 
+            await asyncio.sleep(self.rate_limiter.delay)
             results.extend(batch_results)
 
         if not results:
@@ -318,51 +382,6 @@ class SportsMarketLookup(ABC):
             )
 
         return pd.DataFrame(results)
-
-    def _create_batches(self, zip_codes: List[str]) -> List[List[str]]:
-        """Create batches of ZIP codes."""
-        return [
-            zip_codes[i : i + self.config.batch_size]
-            for i in range(0, len(zip_codes), self.config.batch_size)
-        ]
-
-    async def _process_batch(self, batch: List[str]) -> List[dict]:
-        """Process a batch of ZIP codes."""
-        tasks = []
-        for zip_code in batch:
-            task = self._process_single_zip(zip_code)
-            tasks.append(task)
-            await asyncio.sleep(self.rate_limiter.delay)
-
-        return await asyncio.gather(*tasks)
-
-    async def _process_single_zip(self, zip_code: str) -> dict:
-        """Process a single ZIP code."""
-        is_valid, error_code, error_msg = self._validate_zip(zip_code)
-        if not is_valid:
-            return {
-                "zip_code": zip_code,
-                "error_code": error_code,
-                "error_message": error_msg,
-            }
-
-        try:
-            url = self.get_request_url(zip_code)
-            async with self.session.get(url) as response:
-                response.raise_for_status()
-                data = await response.json()
-                success, teams = await self.parse_response(data)
-                return {
-                    "zip_code": zip_code,
-                    "teams": teams if success else None,
-                    "error_code": None if success else ErrorCode.INVALID_DATA,
-                }
-        except Exception as e:
-            return {
-                "zip_code": zip_code,
-                "error_code": ErrorCode.UNKNOWN,
-                "error_message": str(e),
-            }
 
 
 class MLBMarketLookup(SportsMarketLookup):
@@ -519,11 +538,21 @@ class UnifiedMarketLookup:
                 f.write(f"\n{league} Summary:\n")
                 f.write("-" * (len(league) + 9) + "\n")
                 f.write(f"Total records: {len(df)}\n")
-                successful = len(df[df["error_code"].isnull()])  # Changed from isna()
+
+                # Safely check for successful lookups
+                successful = 0
+                if not df.empty:
+                    successful = len(
+                        df[df["error_code"].isna() | df["error_code"].isnull()]
+                    )
+
                 f.write(f"Successful lookups: {successful}\n")
                 f.write(f"Failed lookups: {len(df) - successful}\n")
                 if len(df) > 0:
                     f.write(f"Success rate: {(successful/len(df))*100:.2f}%\n")
+
+                if error_report:
+                    f.write(f"Detailed error report: {error_report}\n")
 
                 total_processed += len(df)
                 total_successful += successful
@@ -543,17 +572,44 @@ class UnifiedMarketLookup:
         """Process ZIP codes for all leagues with proper resource management."""
         results = {}
 
+        # Define the expected columns for our DataFrame
+        empty_df = pd.DataFrame(
+            columns=["zip_code", "in_market_teams", "error_code", "error_message"]
+        )
+
         try:
             for league_name, processor in self.processors.items():
                 self.logger.info(f"Processing {league_name}...")
                 try:
                     df = await processor.process_zip_codes(zip_codes)
-                    error_report = processor.save_error_report()
+                    # Ensure DataFrame has all required columns
+                    for col in empty_df.columns:
+                        if col not in df.columns:
+                            df[col] = None
+
+                    error_report = None
+                    if hasattr(processor, "save_error_report"):
+                        error_report = processor.save_error_report()
+
                     results[league_name] = (df, error_report)
                     self.logger.info(f"Completed {league_name} processing")
                 except Exception as e:
                     self.logger.error(f"Failed to process {league_name}: {str(e)}")
-                    results[league_name] = (pd.DataFrame(), None)
+                    # Create DataFrame with same structure but error information
+                    error_df = empty_df.copy()
+                    # Add error records for each ZIP code
+                    error_records = []
+                    for zip_code in zip_codes:
+                        error_records.append(
+                            {
+                                "zip_code": zip_code,
+                                "in_market_teams": None,
+                                "error_code": "PROCESSING_ERROR",
+                                "error_message": str(e),
+                            }
+                        )
+                    error_df = pd.DataFrame(error_records)
+                    results[league_name] = (error_df, None)
 
             # Generate combined report and export
             self.create_combined_report(results)
