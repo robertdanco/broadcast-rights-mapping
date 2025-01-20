@@ -659,7 +659,7 @@ async def main_async():
     )
     parser.add_argument(
         "--input-file",
-        default="zip_dma_mapping.csv",
+        default="mapping_files/zip_dma_mapping_testing.csv",
         help="Input CSV file containing ZIP codes",
     )
     parser.add_argument("--config-file", help="Configuration file (JSON)", default=None)
