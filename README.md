@@ -201,3 +201,26 @@ Example config.json:
   "logs_dir": "logs"
 }
 ```
+
+## Streaming Rights Diagrams
+
+### NHL Streaming Rights
+
+```mermaid
+flowchart TD
+    title[NHL Streaming Rights Wireframing]
+    note[Based on NHL website documentation; for US residents only.]
+    click note href "https://www.nhl.com/info/how-to-watch-and-stream-nhl-games" _blank
+    
+    NHL[NHL] --> GameType{National or regional?}
+    GameType -->|National| Network{Which network?}
+    GameType -->|Regional| Location{User co-location status?}
+    
+    Network -->|ESPN+| ESPN+App[Streaming apps: ESPN+, Hulu]
+    Network -->|TNT| TNTApp[Streaming apps: Watch TNT, Max]
+    Network -->|ESPN| ESPNApp[Streaming apps: ESPN]
+    Network -->|ABC| ABCApp[Streaming apps: ESPN+]
+    
+    Location -->|In local market| Local[Streaming apps: depends on local broadcast partner]
+    Location -->|Out-of-market| OutMarket[Streaming apps: ESPN+, except when exclusively broadcast on NHL Network]
+```
