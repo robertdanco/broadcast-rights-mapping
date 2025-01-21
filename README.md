@@ -1,4 +1,4 @@
-# Sports Data Scraping Tools
+# Broadcast Rights Mapping
 
 A comprehensive collection of Python scripts for scraping game schedules, watch options, and local market rights information from various sports websites and APIs. The toolkit includes support for multiple sports leagues and can handle both game schedule scraping from ESPN and local market rights determination from league-specific APIs.
 
