@@ -26,3 +26,6 @@ uv.lock
 
 # secrets
 .env
+
+# VSC files
+.vscode/*
