@@ -23,3 +23,6 @@ logs/*
 
 # uv generated files
 uv.lock
+
+# secrets
+.env
