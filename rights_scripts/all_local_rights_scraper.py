@@ -25,7 +25,7 @@ class ScraperConfig:
 
     batch_size: int = 10
     rate_limit: int = 50
-    max_retries: int = 3
+    max_retries: int = 5
     timeout: int = 30
     output_dir: str = "data"
     logs_dir: str = "logs"
@@ -377,7 +377,7 @@ class SportsMarketLookup(ABC):
                     )
 
             processed += len(batch)
-            if processed % 100 == 0:  # Status update every 100 ZIPs
+            if processed % 500 == 0:  # Status update every 100 ZIPs
                 self.logger.info(
                     f"{self.league_config.name}: Processed {processed}/{total} ZIP codes"
                 )
